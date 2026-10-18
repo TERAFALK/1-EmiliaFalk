@@ -36,7 +36,14 @@ export default function ResultChart({ data }: { data: TrendPoint[] }) {
       ? data.filter((d) => new Date(d.date).getTime() >= cutoff)
       : data;
 
-  const key = mode === "total" ? "total" : "average";
+  // En graf per serietyp (t.ex. 40 och 60 skott) – totalerna är inte jämförbara.
+  const byType = new Map<number, TrendPoint[]>();
+  for (const d of filtered) {
+    const list = byType.get(d.matchType) ?? [];
+    list.push(d);
+    byType.set(d.matchType, list);
+  }
+  const groups = [...byType.entries()].sort((a, b) => b[0] - a[0]);
 
   return (
     <div>
@@ -62,50 +69,86 @@ export default function ResultChart({ data }: { data: TrendPoint[] }) {
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {groups.length === 0 ? (
         <div className="flex h-64 items-center justify-center text-sm text-ink-muted">
           Inga resultat i vald period ännu.
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={filtered} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
-            <defs>
-              <linearGradient id="pinkStroke" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor={PINK} />
-                <stop offset="100%" stopColor={PINK_DARK} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#F3D9E8" vertical={false} />
-            <XAxis
-              dataKey="label"
-              tick={{ fontSize: 12, fill: "#8A8A96" }}
-              tickLine={false}
-              axisLine={{ stroke: "#F3D9E8" }}
-            />
-            <YAxis
-              tick={{ fontSize: 12, fill: "#8A8A96" }}
-              tickLine={false}
-              axisLine={false}
-              domain={
-                mode === "average" ? [0, 10.9] : ["dataMin - 5", "dataMax + 5"]
-              }
-            />
-            {mode === "average" && (
-              <ReferenceLine y={10.9} stroke="#F3B6D4" strokeDasharray="4 4" />
-            )}
-            <Tooltip content={<ChartTooltip mode={mode} />} />
-            <Line
-              type="monotone"
-              dataKey={key}
-              stroke="url(#pinkStroke)"
-              strokeWidth={3}
-              dot={{ r: 4, fill: "#fff", stroke: PINK, strokeWidth: 2 }}
-              activeDot={{ r: 6, fill: PINK }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
+        <div className="space-y-8">
+          {groups.map(([matchType, points]) => (
+            <div key={matchType}>
+              {groups.length > 1 && (
+                <p className="mb-2 text-sm font-medium text-ink-soft">
+                  {matchType} skott
+                  <span className="ml-2 font-normal text-ink-muted">
+                    ({points.length} resultat)
+                  </span>
+                </p>
+              )}
+              <TrendLineChart
+                data={points}
+                mode={mode}
+                gradientId={`pinkStroke-${matchType}`}
+                height={groups.length > 1 ? 240 : 300}
+              />
+            </div>
+          ))}
+        </div>
       )}
     </div>
+  );
+}
+
+/** En linjegraf för resultat av samma typ (samma antal skott). */
+function TrendLineChart({
+  data,
+  mode,
+  gradientId,
+  height,
+}: {
+  data: TrendPoint[];
+  mode: Mode;
+  gradientId: string;
+  height: number;
+}) {
+  const key = mode === "total" ? "total" : "average";
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <LineChart data={data} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor={PINK} />
+            <stop offset="100%" stopColor={PINK_DARK} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="#F3D9E8" vertical={false} />
+        <XAxis
+          dataKey="label"
+          tick={{ fontSize: 12, fill: "#8A8A96" }}
+          tickLine={false}
+          axisLine={{ stroke: "#F3D9E8" }}
+        />
+        <YAxis
+          tick={{ fontSize: 12, fill: "#8A8A96" }}
+          tickLine={false}
+          axisLine={false}
+          domain={mode === "average" ? [0, 10.9] : ["dataMin - 5", "dataMax + 5"]}
+          tickFormatter={(v: number) => (mode === "total" ? String(Math.round(v)) : String(v))}
+        />
+        {mode === "average" && (
+          <ReferenceLine y={10.9} stroke="#F3B6D4" strokeDasharray="4 4" />
+        )}
+        <Tooltip content={<ChartTooltip mode={mode} />} />
+        <Line
+          type="monotone"
+          dataKey={key}
+          stroke={`url(#${gradientId})`}
+          strokeWidth={3}
+          dot={{ r: 4, fill: "#fff", stroke: PINK, strokeWidth: 2 }}
+          activeDot={{ r: 6, fill: PINK }}
+        />
+      </LineChart>
+    </ResponsiveContainer>
   );
 }
 
